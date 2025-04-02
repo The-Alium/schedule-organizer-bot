@@ -4,7 +4,8 @@ import sqlite3
 from datetime import datetime, timedelta
 
 # Укажите ID ролей, которым разрешено редактировать расписание
-ALLOWED_ROLES = {1169723413443661984}  # Замените на свои
+ALLOWED_ROLES = {1169699108588617863, 1169723413443661984} 
+OFFICER_ROLE_ID = 1169723413443661984 # ID роли офицера
 
 # Разрешенные дни недели
 VALID_DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
@@ -16,18 +17,58 @@ cursor.execute("""
 CREATE TABLE IF NOT EXISTS schedule (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     day TEXT UNIQUE,
-    organizer TEXT,
+    organizer_id INTEGER,
     start_time TEXT,
     gamemode TEXT
 )
 """)
 conn.commit()
 
-bot = commands.Bot(intents=disnake.Intents.default())
+bot = commands.Bot(command_prefix=None, intents=disnake.Intents.default())
+CHANNEL_ID = 1169699111348482190  # Замените на ID канала, где будет отображаться расписание
+schedule_message_id = None  # ID сообщения с расписанием
 
 
-# Команда для добавления события в расписание
-@bot.slash_command(description="Добавить событие в расписание")
+async def update_schedule(channel):
+    global schedule_message_id
+    cursor.execute("SELECT day, organizer_id, start_time, gamemode FROM schedule ORDER BY id")
+    events = cursor.fetchall()
+
+    event_dict = {day: "Свободно" for day in VALID_DAYS}
+
+    for day, organizer_id, start_time, gamemode in events:
+        event_dict[day] = f"**Кто занял:** <@{organizer_id}>\n**Время:** {start_time}\n**Гейммод:** {gamemode}"
+
+    current_date = datetime.utcnow() + timedelta(hours=3)  # UTC+3
+    current_week_of_month = (current_date.day - 1) // 7 + 1
+    current_month = current_date.strftime("%B")
+
+    embed = disnake.Embed(title=f"📅 Расписание на {current_week_of_month}-ю неделю {current_month}",
+                          color=disnake.Color.dark_purple())
+    embed.set_footer(text="For Alium by alexeyyt4/Футаба")
+
+    for day in VALID_DAYS:
+        embed.add_field(name=f"**{day}**", value=event_dict[day], inline=False)
+
+    if schedule_message_id:
+        try:
+            message = await channel.fetch_message(schedule_message_id)
+            await message.edit(embed=embed)
+        except:
+            sent_message = await channel.send(embed=embed)
+            schedule_message_id = sent_message.id
+    else:
+        sent_message = await channel.send(embed=embed)
+        schedule_message_id = sent_message.id
+
+
+@bot.event
+async def on_ready():
+    channel = bot.get_channel(CHANNEL_ID)
+    await update_schedule(channel)
+
+
+@bot.slash_command(description="Добавить или обновить событие в расписании")
 async def add_event(inter: disnake.ApplicationCommandInteraction, day: str, start_time: str, gamemode: str):
     if not any(role.id in ALLOWED_ROLES for role in inter.author.roles):
         await inter.response.send_message("У вас нет прав для редактирования расписания.", ephemeral=True)
@@ -39,56 +80,53 @@ async def add_event(inter: disnake.ApplicationCommandInteraction, day: str, star
             ephemeral=True)
         return
 
-    cursor.execute("SELECT * FROM schedule WHERE day = ?", (day.capitalize(),))
-    existing_event = cursor.fetchone()
-
-    if existing_event:
-        await inter.response.send_message(f"День {day.capitalize()} уже занят.", ephemeral=True)
-        return
-
-    cursor.execute("INSERT INTO schedule (day, organizer, start_time, gamemode) VALUES (?, ?, ?, ?)",
-                   (day.capitalize(), inter.author.display_name, start_time, gamemode))
+    cursor.execute("REPLACE INTO schedule (day, organizer_id, start_time, gamemode) VALUES (?, ?, ?, ?)",
+                   (day.capitalize(), inter.author.id, start_time, gamemode))
     conn.commit()
-    await inter.response.send_message(f"Событие добавлено на {day.capitalize()} в {start_time}. Гейммод: {gamemode}")
+
+    await inter.response.send_message(f"Событие обновлено на {day.capitalize()} в {start_time}. Гейммод: {gamemode}")
+    channel = bot.get_channel(CHANNEL_ID)
+    await update_schedule(channel)
 
 
-# Команда для просмотра расписания в Embed-формате
-@bot.slash_command(description="Показать расписание на неделю")
-async def show_schedule(inter: disnake.ApplicationCommandInteraction):
+@bot.slash_command(description="Отменить бронирование дня")
+async def cancel_event(inter: disnake.ApplicationCommandInteraction, day: str):
     if not any(role.id in ALLOWED_ROLES for role in inter.author.roles):
         await inter.response.send_message("У вас нет прав для редактирования расписания.", ephemeral=True)
         return
 
-    cursor.execute("SELECT day, organizer, start_time, gamemode FROM schedule ORDER BY id")
-    events = cursor.fetchall()
+    if day.capitalize() not in VALID_DAYS:
+        await inter.response.send_message(
+            "Некорректный день недели. Используйте: Понедельник, Вторник, Среда, Четверг, Пятница, Суббота, Воскресенье.",
+            ephemeral=True)
+        return
 
-    event_dict = {day: "Свободно" for day in VALID_DAYS}  # Заполняем все дни как "Свободно"
+    cursor.execute("SELECT organizer_id FROM schedule WHERE day = ?", (day.capitalize(),))
+    row = cursor.fetchone()
+    if row:
+        organizer_id = row[0]
+        if organizer_id != inter.author.id and not any(role.id == OFFICER_ROLE_ID for role in inter.author.roles):
+            await inter.response.send_message("Вы не можете отменить бронирование, сделанное другим организатором.",
+                                              ephemeral=True)
+            return
 
-    for day, organizer, start_time, gamemode in events:
-        event_dict[day] = f"**Кто занял:** {organizer}\n**Время:** {start_time}\n**Гейммод:** {gamemode}"
-
-    # Текущая неделя и месяц
-    current_date = datetime.utcnow() + timedelta(hours=3)  # UTC+3
-    current_week_of_month = (current_date.day - 1) // 7 + 1  # Вычисление недели месяца
-    current_month = (datetime.utcnow() + timedelta(hours=3)).strftime("%B")  # Текущий месяц
-
-    embed = disnake.Embed(title=f"📅 Расписание на {current_week_of_month}-ю неделю {current_month}",
-                          color=disnake.Color.dark_purple())
-    embed.set_footer(text="For Alium by Futaba")
-
-    for day in VALID_DAYS:
-        embed.add_field(name=f"**{day}**", value=event_dict[day], inline=False)
-
-    await inter.response.send_message(embed=embed)
+        cursor.execute("DELETE FROM schedule WHERE day = ?", (day.capitalize(),))
+        conn.commit()
+        await inter.response.send_message(f"Бронирование на {day.capitalize()} отменено.")
+        channel = bot.get_channel(CHANNEL_ID)
+        await update_schedule(channel)
+    else:
+        await inter.response.send_message("На этот день нет бронирования.", ephemeral=True)
 
 
-# Очистка расписания по понедельникам в полночь
-@tasks.loop(hours=1)
+@tasks.loop(hours=24)
 async def clear_schedule():
     now = datetime.utcnow() + timedelta(hours=3)  # UTC+3
-    if now.weekday() == 0 and now.hour == 0:  # Понедельник, 00:00
+    if now.weekday() == 0 and now.hour == 0:
         cursor.execute("DELETE FROM schedule")
         conn.commit()
+        channel = bot.get_channel(CHANNEL_ID)
+        await update_schedule(channel)
 
 
 @clear_schedule.before_loop
@@ -98,5 +136,4 @@ async def before_clearing():
 
 clear_schedule.start()
 
-
-bot.run("")
+bot.run("MTA3NjYwMTM3MjE4NDY4MjU5OA.G3-MqK.oU8F6XyzSXl21u4aje_6bMEvWs3_4m777Iyctk")
