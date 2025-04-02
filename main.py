@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime, timedelta
 
 # Укажите ID ролей, которым разрешено редактировать расписание
-ALLOWED_ROLES = {1169699108588617863, 1169723413443661984} 
+ALLOWED_ROLES = {1169699108588617863, 1169723413443661984}
 OFFICER_ROLE_ID = 1169723413443661984 # ID роли офицера
 
 # Разрешенные дни недели
@@ -119,7 +119,7 @@ async def cancel_event(inter: disnake.ApplicationCommandInteraction, day: str):
         await inter.response.send_message("На этот день нет бронирования.", ephemeral=True)
 
 
-@tasks.loop(hours=24)
+@tasks.loop(hours=1)
 async def clear_schedule():
     now = datetime.utcnow() + timedelta(hours=3)  # UTC+3
     if now.weekday() == 0 and now.hour == 0:
