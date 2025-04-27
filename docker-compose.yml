@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  alium_organizer:
+    build: .
+    container_name: alium_organizer
+    env_file:
+      - token.env
+    restart: unless-stopped
+    volumes:
+      - .:/app
+    networks:
+      - bot_network
+
+networks:
+  bot_network:
+    driver: bridge
