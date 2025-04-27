@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  alium_organizer:
+  schedule_organizerbot:
     build: .
-    container_name: alium_organizer
+    container_name: schedule_organizerbot
     env_file:
       - token.env
     restart: unless-stopped

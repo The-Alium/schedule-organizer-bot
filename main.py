@@ -6,6 +6,9 @@ import sqlite3
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
+# Загрузка конфига
+load_dotenv("config.env")
+
 # Укажите ID ролей, которым разрешено редактировать расписание
 ALLOWED_ROLES = {828641723353137224, 731187000673173594}
 OFFICER_ROLE_ID = 731187000673173594 # ID роли офицера
@@ -13,8 +16,6 @@ OFFICER_ROLE_ID = 731187000673173594 # ID роли офицера
 # Разрешенные дни недели
 VALID_DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
 
-# Загрузка токена бота
-load_dotenv("token.env")
 
 # Подключение к базе данных
 conn = sqlite3.connect("schedule.db")
@@ -31,8 +32,8 @@ CREATE TABLE IF NOT EXISTS schedule (
 conn.commit()
 
 bot = commands.Bot(command_prefix=None, intents=disnake.Intents.default())
-CHANNEL_ID = None  # Замените на ID канала, где будет отображаться расписание
-schedule_message_id = None  # ID сообщения с расписанием
+CHANNEL_ID = os.getenv("CHANNEL_ID")  # Замените на ID канала, где будет отображаться расписание
+schedule_message_id = os.getenv("MESSAGE_ID")  # ID сообщения с расписанием
 
 
 async def update_schedule(channel):
