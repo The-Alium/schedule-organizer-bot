@@ -1,7 +1,10 @@
+import os
+
 import disnake
 from disnake.ext import commands, tasks
 import sqlite3
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 
 # Укажите ID ролей, которым разрешено редактировать расписание
 ALLOWED_ROLES = {1169699108588617863, 1169723413443661984}
@@ -9,6 +12,9 @@ OFFICER_ROLE_ID = 1169723413443661984 # ID роли офицера
 
 # Разрешенные дни недели
 VALID_DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
+
+# Загрузка токена бота
+load_dotenv("token.env")
 
 # Подключение к базе данных
 conn = sqlite3.connect("schedule.db")
@@ -136,4 +142,4 @@ async def before_clearing():
 
 clear_schedule.start()
 
-bot.run("MTA3NjYwMTM3MjE4NDY4MjU5OA.G3-MqK.oU8F6XyzSXl21u4aje_6bMEvWs3_4m777Iyctk")
+bot.run(os.getenv("BOT_TOKEN"))
