@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 # Укажите ID ролей, которым разрешено редактировать расписание
-ALLOWED_ROLES = {1169699108588617863, 1169723413443661984}
-OFFICER_ROLE_ID = 1169723413443661984 # ID роли офицера
+ALLOWED_ROLES = {828641723353137224, 731187000673173594}
+OFFICER_ROLE_ID = 731187000673173594 # ID роли офицера
 
 # Разрешенные дни недели
 VALID_DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS schedule (
 conn.commit()
 
 bot = commands.Bot(command_prefix=None, intents=disnake.Intents.default())
-CHANNEL_ID = 1169699111348482190  # Замените на ID канала, где будет отображаться расписание
+CHANNEL_ID = None  # Замените на ID канала, где будет отображаться расписание
 schedule_message_id = None  # ID сообщения с расписанием
 
 
@@ -70,12 +70,13 @@ async def update_schedule(channel):
 
 @bot.event
 async def on_ready():
+    print(f"Logging as {bot.user}")
     channel = bot.get_channel(CHANNEL_ID)
     await update_schedule(channel)
 
 
 @bot.slash_command(description="Добавить или обновить событие в расписании")
-async def add_event(inter: disnake.ApplicationCommandInteraction, day: str, start_time: str, gamemode: str):
+async def add_event(inter: disnake.ApplicationCommandInteraction, day: str = commands.Param(description="День недели"), start_time: str = commands.Param(description="Время начала события"), gamemode: str = commands.Param(description="Гейммод")):
     if not any(role.id in ALLOWED_ROLES for role in inter.author.roles):
         await inter.response.send_message("У вас нет прав для редактирования расписания.", ephemeral=True)
         return
@@ -96,7 +97,7 @@ async def add_event(inter: disnake.ApplicationCommandInteraction, day: str, star
 
 
 @bot.slash_command(description="Отменить бронирование дня")
-async def cancel_event(inter: disnake.ApplicationCommandInteraction, day: str):
+async def cancel_event(inter: disnake.ApplicationCommandInteraction, day: str = commands.Param(description="День недели")):
     if not any(role.id in ALLOWED_ROLES for role in inter.author.roles):
         await inter.response.send_message("У вас нет прав для редактирования расписания.", ephemeral=True)
         return
